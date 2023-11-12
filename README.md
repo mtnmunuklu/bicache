@@ -9,6 +9,7 @@
 - [Usage](#usage)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
+- [Acknowledgement](#acknowledgement)
 - [Sponsors](#sponsors)
 - [License](#license)
 
@@ -66,6 +67,10 @@ For more examples and library usage, please refer to the [Documentation](docs/bi
 ## Contributing
 
 Contributions to BiCache are welcome and encouraged! Please read the [contribution guidelines](CONTRIBUTING.md) before making any contributions to the project.
+
+## Acknowledgments
+
+A big shoutout to [Oğuzhan Mevsim](https://github.com/ogzhnmvsm) for discovering the project name for BiCache.
 
 ## Sponsors
 
