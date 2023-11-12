@@ -17,5 +17,13 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# VS Code specific files
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
 # Go workspace file
 go.work
