@@ -2,6 +2,7 @@ package bicache
 
 import (
 	"encoding/gob"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -57,8 +58,8 @@ func NewBiCache(capacity int, cleanupInterval time.Duration) *BiCache {
 		capacity:          capacity,
 		cacheMap:          make(map[interface{}]CacheEntry),
 		cleanupTicker:     time.NewTicker(cleanupInterval),
-		serializer:        gob.NewEncoder(nil),
-		deserializer:      gob.NewDecoder(nil),
+		serializer:        nil,
+		deserializer:      nil,
 		cachePolicy:       nil, // Cache policy can be set using SetCachePolicy method
 		globalExpiration:  0,   // Global expiration can be set using SetGlobalExpiration method
 		cacheEventHandler: nil, // Cache event handler can be set using SetCacheEventHandler method
@@ -80,6 +81,32 @@ func (c *BiCache) Get(key interface{}) (interface{}, bool) {
 	if exists {
 		entry.Accessed = time.Now()
 
+		if c.decompression != nil {
+			byteValue, ok := entry.Value.([]byte)
+			if !ok {
+				c.metrics.SetError++
+				return nil, false
+			}
+
+			// Decompress the value
+			decompressedValue, err := c.decompression(byteValue)
+			if err != nil {
+				c.metrics.SetError++
+				return nil, false
+			}
+			entry.Value = decompressedValue
+		}
+
+		if c.deserializer != nil {
+			// Decode the value
+			decodedValue, err := c.decodeValue(entry.Value)
+			if err != nil {
+				c.metrics.SetError++
+				return nil, false
+			}
+			entry.Value = decodedValue
+		}
+
 		if entry.Expiration.IsZero() || time.Now().Before(entry.Expiration) {
 			c.metrics.Hits++
 			return entry.Value, true
@@ -97,7 +124,27 @@ func (c *BiCache) Set(key interface{}, value interface{}, expiration time.Durati
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	entry := CacheEntry{Value: value, Accessed: time.Now()}
+	entry := CacheEntry{Accessed: time.Now()}
+
+	// Encode the value
+	if c.serializer != nil {
+		encodedValue, err := c.encodeValue(value)
+		if err != nil {
+			c.metrics.SetError++
+			return
+		}
+		entry.Value = encodedValue
+	}
+
+	// Compress the value
+	if c.compression != nil {
+		compressedValue, err := c.compressValue(entry.Value)
+		if err != nil {
+			c.metrics.SetError++
+			return
+		}
+		entry.Value = compressedValue
+	}
 
 	if expiration > 0 {
 		entry.Expiration = time.Now().Add(expiration)
@@ -125,6 +172,42 @@ func (c *BiCache) Set(key interface{}, value interface{}, expiration time.Durati
 	if c.cacheEventHandler != nil {
 		go c.cacheEventHandler(CacheEventSet, key, entry)
 	}
+}
+
+func (c *BiCache) compressValue(value interface{}) (interface{}, error) {
+	if c.compression == nil {
+		// Compression is not enabled, return the original value
+		return value, nil
+	}
+
+	switch val := value.(type) {
+	case []byte:
+		// If the value is a byte slice, apply compression
+		compressedValue, err := c.compression(val)
+		if err != nil {
+			return nil, err
+		}
+		return compressedValue, nil
+	default:
+		// If the value is not a byte slice, return the original value
+		return value, nil
+	}
+}
+
+func (c *BiCache) decodeValue(encodedValue interface{}) (interface{}, error) {
+	value := reflect.New(reflect.TypeOf(encodedValue))
+	if err := c.deserializer.DecodeValue(value); err != nil {
+		return nil, err
+	}
+	return value.Elem().Interface(), nil
+}
+
+func (c *BiCache) encodeValue(value interface{}) (interface{}, error) {
+	valueToEncode := reflect.ValueOf(value)
+	if err := c.serializer.EncodeValue(valueToEncode); err != nil {
+		return nil, err
+	}
+	return value, nil
 }
 
 func (c *BiCache) Delete(key interface{}) {
@@ -213,19 +296,32 @@ func (c *BiCache) periodicCleanup() {
 	}
 }
 
+// cleanup method cleans up the currently valid items in the cache.
 func (c *BiCache) cleanup() {
+	// Get the current time
 	now := time.Now()
 
+	// Check each item in the cache
 	for key, entry := range c.cacheMap {
-		if entry.Expiration.IsZero() || now.Before(entry.Expiration) {
-			continue
+		// Determine the expiration time to use for comparison
+		var expiration time.Time
+		if c.globalExpiration > 0 {
+			// If globalExpiration is greater than 0, use the item's Accessed time plus globalExpiration
+			expiration = entry.Accessed.Add(c.globalExpiration)
+		} else {
+			// If globalExpiration is 0 or negative, use the item's Expiration directly
+			expiration = entry.Expiration
 		}
 
-		delete(c.cacheMap, key)
-		c.metrics.EntriesCount = int64(len(c.cacheMap))
+		// If the calculated expiration is in the past, clean up this item.
+		if expiration.Before(now) {
+			delete(c.cacheMap, key)
+			c.metrics.EntriesCount = int64(len(c.cacheMap))
 
-		if c.cacheEventHandler != nil {
-			go c.cacheEventHandler(CacheEventDelete, key, CacheEntry{})
+			// If a cache event handler is defined, call it when the item is deleted.
+			if c.cacheEventHandler != nil {
+				go c.cacheEventHandler(CacheEventDelete, key, CacheEntry{})
+			}
 		}
 	}
 }
