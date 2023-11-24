@@ -28,6 +28,9 @@ func TestBiCache_SetGetExpired(t *testing.T) {
 	// Set an expired value in the cache
 	cache.Set("key1", "value1", -time.Second)
 
+	// Wait for a short duration to ensure expiration
+	time.Sleep(2 * time.Second)
+
 	// Get the value from the cache
 	result, found := cache.Get("key1")
 
