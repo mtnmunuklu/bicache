@@ -9,7 +9,6 @@
 - [Usage](#usage)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
-- [Acknowledgements](#acknowledgements)
 - [Sponsors](#sponsors)
 - [License](#license)
 
@@ -37,7 +36,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/your-username/your-package/bicache"
+	"github.com/mtnmunuklu/bicache"
 )
 
 func main() {
@@ -67,10 +66,6 @@ For more examples and library usage, please refer to the [Documentation](docs/bi
 ## Contributing
 
 Contributions to BiCache are welcome and encouraged! Please read the [contribution guidelines](CONTRIBUTING.md) before making any contributions to the project.
-
-## Acknowledgements
-
-A big shoutout to [Oğuzhan Mevsim](https://github.com/ogzhnmvsm) for discovering the project name for BiCache.
 
 ## Sponsors
 
